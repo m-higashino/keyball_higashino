@@ -96,14 +96,8 @@ static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
 }
 
 static void draw_segment(uint8_t segment) {
-    // 反対側OLEDを縦向きに見たときに、数字が縦方向に見える7セグ表示
-    //
-    // OLEDの論理サイズは 128x32 のままですが、
-    // Keyball上では物理的に横向きに見えるため、
-    // x方向を「縦の長さ」として使います。
-
-    const uint8_t x = 30;  // 数字の縦位置。小さいほど上寄せ
-    const uint8_t y = 5;   // 数字の横位置。小さいほど左寄せ
+    const uint8_t x = 30;  // 数字の縦位置
+    const uint8_t y = 5;   // 数字の横位置
     const uint8_t h = 68;  // 数字の高さ
     const uint8_t w = 22;  // 数字の幅
     const uint8_t t = 4;   // 線の太さ
@@ -113,24 +107,24 @@ static void draw_segment(uint8_t segment) {
             draw_rect(x, y + t, t, w - t * 2);
             break;
 
-        case 1:  // 右上
-            draw_rect(x + t, y + w - t, h / 2 - t, t);
+        case 1:  // 右上 → 左上に反転
+            draw_rect(x + t, y, h / 2 - t, t);
             break;
 
-        case 2:  // 右下
-            draw_rect(x + h / 2, y + w - t, h / 2 - t, t);
+        case 2:  // 右下 → 左下に反転
+            draw_rect(x + h / 2, y, h / 2 - t, t);
             break;
 
         case 3:  // 下
             draw_rect(x + h - t, y + t, t, w - t * 2);
             break;
 
-        case 4:  // 左下
-            draw_rect(x + h / 2, y, h / 2 - t, t);
+        case 4:  // 左下 → 右下に反転
+            draw_rect(x + h / 2, y + w - t, h / 2 - t, t);
             break;
 
-        case 5:  // 左上
-            draw_rect(x + t, y, h / 2 - t, t);
+        case 5:  // 左上 → 右上に反転
+            draw_rect(x + t, y + w - t, h / 2 - t, t);
             break;
 
         case 6:  // 中央
