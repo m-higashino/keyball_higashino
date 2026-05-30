@@ -226,6 +226,9 @@ __attribute__((weak)) void keyball_on_apply_motion_to_mouse_scroll(keyball_motio
             r->h = 0;
             break;
         case KEYBALL_SCROLLSNAP_MODE_HORIZONTAL:
+#ifdef SCROLLSNAP_HORIZONTAL_SCROLL_BY_VERTICAL_MOTION
+            r->h = -r->v; // 縦の動きを横スクロールに
+#endif
             r->v = 0;
             break;
         default:
