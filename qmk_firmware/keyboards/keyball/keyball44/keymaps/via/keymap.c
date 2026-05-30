@@ -82,3 +82,147 @@ void oledkit_render_info_user(void) {
     keyball_oled_render_layerinfo();
 }
 #endif
+
+#ifdef OLED_ENABLE
+
+#    include "lib/oledkit/oledkit.h"
+
+static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
+    for (uint8_t i = 0; i < w; i++) {
+        for (uint8_t j = 0; j < h; j++) {
+            oled_write_pixel(x + i, y + j, true);
+        }
+    }
+}
+
+static void draw_segment(uint8_t segment) {
+    // 128x32 OLEDの中央に、7セグ風の大きい数字を表示する
+    const uint8_t x = 44;
+    const uint8_t y = 2;
+    const uint8_t w = 40;
+    const uint8_t h = 28;
+    const uint8_t t = 4;
+
+    switch (segment) {
+        case 0:  // 上
+            draw_rect(x + t, y, w - t * 2, t);
+            break;
+        case 1:  // 右上
+            draw_rect(x + w - t, y + t, t, h / 2 - t);
+            break;
+        case 2:  // 右下
+            draw_rect(x + w - t, y + h / 2, t, h / 2 - t);
+            break;
+        case 3:  // 下
+            draw_rect(x + t, y + h - t, w - t * 2, t);
+            break;
+        case 4:  // 左下
+            draw_rect(x, y + h / 2, t, h / 2 - t);
+            break;
+        case 5:  // 左上
+            draw_rect(x, y + t, t, h / 2 - t);
+            break;
+        case 6:  // 中央
+            draw_rect(x + t, y + h / 2 - t / 2, w - t * 2, t);
+            break;
+    }
+}
+
+static void render_big_layer_number(void) {
+    uint8_t layer = get_highest_layer(layer_state);
+
+    oled_clear();
+
+    switch (layer) {
+        case 0:
+            draw_segment(0);
+            draw_segment(1);
+            draw_segment(2);
+            draw_segment(3);
+            draw_segment(4);
+            draw_segment(5);
+            break;
+
+        case 1:
+            draw_segment(1);
+            draw_segment(2);
+            break;
+
+        case 2:
+            draw_segment(0);
+            draw_segment(1);
+            draw_segment(6);
+            draw_segment(4);
+            draw_segment(3);
+            break;
+
+        case 3:
+            draw_segment(0);
+            draw_segment(1);
+            draw_segment(6);
+            draw_segment(2);
+            draw_segment(3);
+            break;
+
+        case 4:
+            draw_segment(5);
+            draw_segment(6);
+            draw_segment(1);
+            draw_segment(2);
+            break;
+
+        case 5:
+            draw_segment(0);
+            draw_segment(5);
+            draw_segment(6);
+            draw_segment(2);
+            draw_segment(3);
+            break;
+
+        case 6:
+            draw_segment(0);
+            draw_segment(5);
+            draw_segment(6);
+            draw_segment(4);
+            draw_segment(2);
+            draw_segment(3);
+            break;
+
+        case 7:
+            draw_segment(0);
+            draw_segment(1);
+            draw_segment(2);
+            break;
+
+        case 8:
+            draw_segment(0);
+            draw_segment(1);
+            draw_segment(2);
+            draw_segment(3);
+            draw_segment(4);
+            draw_segment(5);
+            draw_segment(6);
+            break;
+
+        case 9:
+            draw_segment(0);
+            draw_segment(1);
+            draw_segment(2);
+            draw_segment(3);
+            draw_segment(5);
+            draw_segment(6);
+            break;
+
+        default:
+            oled_set_cursor(6, 1);
+            oled_write_P(PSTR("?"), false);
+            break;
+    }
+}
+
+// これが「ケーブルを接続していない側」のOLED表示
+void oledkit_render_logo_user(void) {
+    render_big_layer_number();
+}
+
+#endif
