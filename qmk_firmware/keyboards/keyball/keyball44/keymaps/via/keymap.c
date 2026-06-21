@@ -138,7 +138,7 @@ static void sync_oled_values_from_master(void) {
 
     // matrix_scan_userではなくOLED描画タイミングでだけ同期する。
     // トラックボール処理への影響を避けるため、同期間隔は長めにする。
-    if (timer_elapsed32(last_sync) > 500) {
+    if (timer_elapsed32(last_sync) > 1000) {
         oled_sync.cpi = keyball_get_cpi();
         oled_sync.scr = keyball_get_scroll_div();
 
@@ -199,7 +199,7 @@ static void render_slave_oled(void) {
 
     oled_set_cursor(0, 3);
     oled_write_P(PSTR("CAPS: "), false);
-    oled_write_P(led.caps_lock ? PSTR("ON") : PSTR("OFF"), false);
+    oled_write_P(led.caps_lock ? PSTR("ON") : PSTR("-"), false);
 }
 
 // マスター側OLED。
