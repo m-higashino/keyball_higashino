@@ -181,32 +181,57 @@ static uint8_t get_display_scr(void) {
 }
 
 static void render_slave_oled(void) {
+    static uint8_t last_layer = 255;
+    static uint8_t last_cpi   = 255;
+    static uint8_t last_scr   = 255;
+    static bool last_caps     = false;
+    static bool last_num      = false;
+    static bool initialized   = false;
+
     uint8_t layer = get_highest_layer(layer_state);
+    uint8_t cpi   = get_display_cpi();
+    uint8_t scr   = get_display_scr();
     led_t led     = host_keyboard_led_state();
+
+    bool changed = !initialized ||
+                   layer != last_layer ||
+                   cpi != last_cpi ||
+                   scr != last_scr ||
+                   led.caps_lock != last_caps ||
+                   led.num_lock != last_num;
+
+    if (!changed) {
+        return;
+    }
+
+    initialized = true;
+    last_layer  = layer;
+    last_cpi    = cpi;
+    last_scr    = scr;
+    last_caps   = led.caps_lock;
+    last_num    = led.num_lock;
 
     oled_clear();
 
-    // 1行目：レイヤーとCPIを大きめに見せるため短縮表示
     oled_set_cursor(0, 0);
-    oled_write_P(PSTR("L"), false);
+    oled_write_P(PSTR("LYR : "), false);
     oled_write_u8(layer);
-    oled_write_P(PSTR(" C"), false);
-    oled_write_u8(get_display_cpi());
 
-    // 2行目：SCR
     oled_set_cursor(0, 1);
-    oled_write_P(PSTR("S"), false);
-    oled_write_u8(get_display_scr());
+    oled_write_P(PSTR("CPI : "), false);
+    oled_write_u8(cpi);
 
-    // 3行目：Caps Lock
     oled_set_cursor(0, 2);
-    oled_write_P(PSTR("CAP "), false);
-    oled_write_P(led.caps_lock ? PSTR("ON") : PSTR("--"), false);
+    oled_write_P(PSTR("SCR : "), false);
+    oled_write_u8(scr);
 
-    // 4行目：Num Lock
     oled_set_cursor(0, 3);
-    oled_write_P(PSTR("NUM "), false);
-    oled_write_P(led.num_lock ? PSTR("ON") : PSTR("--"), false);
+    oled_write_P(PSTR("CAPS: "), false);
+    oled_write_P(led.caps_lock ? PSTR("ON") : PSTR("OFF"), false);
+
+    oled_set_cursor(0, 4);
+    oled_write_P(PSTR("NUM : "), false);
+    oled_write_P(led.num_lock ? PSTR("ON") : PSTR("OFF"), false);
 }
 
 // マスター側OLED。
