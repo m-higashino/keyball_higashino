@@ -44,19 +44,19 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
                   KC_0     , KC_DOT  , _______  ,         _______  , _______  ,                   KC_DEL   , _______  , _______       , _______  , _______
   ),
 
-  [3] = LAYOUT_universal(
-    RGB_TOG  , AML_TO   , AML_I50  , AML_D50  , _______  , _______  ,                                        RGB_M_P  , RGB_M_B  , RGB_M_R  , RGB_M_SW , RGB_M_SN , RGB_M_K  ,
-    RGB_MOD  , RGB_HUI  , RGB_SAI  , RGB_VAI  , _______  , SCRL_DVI ,                                        RGB_M_X  , RGB_M_G  , RGB_M_T  , RGB_M_TW , _______  , _______  ,
-    RGB_RMOD , RGB_HUD  , RGB_SAD  , RGB_VAD  , _______  , SCRL_DVD ,                                        CPI_D1K  , CPI_D100 , CPI_I100 , CPI_I1K  , _______  , KBC_SAVE ,
-                  QK_BOOT  , KBC_RST  , _______  ,        _______  , _______  ,                   _______  , _______  , _______       , KBC_RST  , QK_BOOT
-  ),
+[3] = LAYOUT_universal(
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, KC_MS_U, _______, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, KC_MS_L, KC_MS_D, KC_MS_R, _______, _______,
+              _______, _______, _______,        _______, _______,                   _______, _______, _______, _______, _______
+),
 
-  [4] = LAYOUT_universal(
-    RGB_TOG  , AML_TO   , AML_I50  , AML_D50  , _______  , _______  ,                                        RGB_M_P  , RGB_M_B  , RGB_M_R  , RGB_M_SW , RGB_M_SN , RGB_M_K  ,
-    RGB_MOD  , RGB_HUI  , RGB_SAI  , RGB_VAI  , _______  , SCRL_DVI ,                                        RGB_M_X  , RGB_M_G  , RGB_M_T  , RGB_M_TW , _______  , _______  ,
-    RGB_RMOD , RGB_HUD  , RGB_SAD  , RGB_VAD  , _______  , SCRL_DVD ,                                        CPI_D1K  , CPI_D100 , CPI_I100 , CPI_I1K  , _______  , KBC_SAVE ,
-                  QK_BOOT  , KBC_RST  , _______  ,        _______  , _______  ,                   _______  , _______  , _______       , KBC_RST  , QK_BOOT
-  ),
+[4] = LAYOUT_universal(
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, KC_MS_U, _______, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, KC_MS_L, KC_MS_D, KC_MS_R, _______, _______,
+              _______, _______, _______,        _______, _______,                   _______, _______, _______, _______, _______
+),
 
   [5] = LAYOUT_universal(
     RGB_TOG  , AML_TO   , AML_I50  , AML_D50  , _______  , _______  ,                                        RGB_M_P  , RGB_M_B  , RGB_M_R  , RGB_M_SW , RGB_M_SN , RGB_M_K  ,
@@ -99,7 +99,6 @@ typedef struct {
     bool    caps;
     bool    num;
     uint8_t mode;
-    bool    master;
 } oled_status_t;
 
 enum {
@@ -118,7 +117,6 @@ static oled_status_t oled_status = {
     .caps   = false,
     .num    = false,
     .mode   = OLED_MODE_MOVE,
-    .master = false,
 };
 
 static uint8_t clamp_1_to_9(uint8_t value) {
@@ -182,7 +180,6 @@ static void collect_oled_status(void) {
     oled_status.caps   = led.caps_lock;
     oled_status.num    = led.num_lock;
     oled_status.mode   = get_oled_mode_from_layer(layer);
-    oled_status.master = is_keyboard_master();
 }
 
 static void oled_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
@@ -205,7 +202,7 @@ void housekeeping_task_user(void) {
     collect_oled_status();
 
     if (timer_elapsed32(last_sync) > 100) {
-        transaction_rpc_send(USER_SYNC_A, sizeof(oled_status_t), &oled_status);
+        transaction_rpc_exec(USER_SYNC_A, sizeof(oled_status_t), &oled_status, 0, NULL);
         last_sync = timer_read32();
     }
 }
@@ -378,7 +375,7 @@ static void render_slave_status_text(void) {
 
     oled_set_cursor(11, 2);
     oled_write_P(PSTR("SD:"), false);
-    oled_write_P(oled_status.master ? PSTR("MST") : PSTR("SLV"), false);
+    oled_write_P(is_keyboard_master() ? PSTR("MST") : PSTR("SLV"), false);
 }
 
 static void render_slave_oled(void) {
