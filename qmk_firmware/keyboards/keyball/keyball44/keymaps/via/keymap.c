@@ -134,7 +134,7 @@ void matrix_scan_user(void) {
         return;
     }
 
-    if (timer_elapsed32(last_sync) > 200) {
+    if (timer_elapsed32(last_sync) > 500) {
         oled_sync.cpi = keyball_get_cpi();
         oled_sync.scr = keyball_get_scroll_div();
 
