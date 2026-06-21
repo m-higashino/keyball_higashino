@@ -44,19 +44,19 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
                   KC_0     , KC_DOT  , _______  ,         _______  , _______  ,                   KC_DEL   , _______  , _______       , _______  , _______
   ),
 
-[3] = LAYOUT_universal(
+  [3] = LAYOUT_universal(
     _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
-    _______, _______, _______, _______, _______, _______,                                      _______, _______, KC_MS_U, _______, _______, _______,
-    _______, _______, _______, _______, _______, _______,                                      _______, KC_MS_L, KC_MS_D, KC_MS_R, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
               _______, _______, _______,        _______, _______,                   _______, _______, _______, _______, _______
-),
+  ),
 
-[4] = LAYOUT_universal(
+  [4] = LAYOUT_universal(
     _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
-    _______, _______, _______, _______, _______, _______,                                      _______, _______, KC_MS_U, _______, _______, _______,
-    _______, _______, _______, _______, _______, _______,                                      _______, KC_MS_L, KC_MS_D, KC_MS_R, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
+    _______, _______, _______, _______, _______, _______,                                      _______, _______, _______, _______, _______, _______,
               _______, _______, _______,        _______, _______,                   _______, _______, _______, _______, _______
-),
+  ),
 
   [5] = LAYOUT_universal(
     RGB_TOG  , AML_TO   , AML_I50  , AML_D50  , _______  , _______  ,                                        RGB_M_P  , RGB_M_B  , RGB_M_R  , RGB_M_SW , RGB_M_SN , RGB_M_K  ,
@@ -89,35 +89,9 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 #ifdef OLED_ENABLE
 
 #    include "lib/oledkit/oledkit.h"
-#    include "transactions.h"
-#    include <string.h>
-
-typedef struct {
-    uint8_t layer;
-    uint8_t cpi;
-    uint8_t scr;
-    bool    caps;
-    bool    num;
-    uint8_t mode;
-} oled_status_t;
-
-enum {
-    OLED_MODE_MOVE = 0,
-    OLED_MODE_VSCROLL,
-    OLED_MODE_HSCROLL,
-};
 
 static uint8_t oled_cpi_value = 5;
 static uint8_t oled_scr_value = 5;
-
-static oled_status_t oled_status = {
-    .layer  = 0,
-    .cpi    = 5,
-    .scr    = 5,
-    .caps   = false,
-    .num    = false,
-    .mode   = OLED_MODE_MOVE,
-};
 
 static uint8_t clamp_1_to_9(uint8_t value) {
     if (value < 1) {
@@ -159,234 +133,45 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return true;
 }
 
-static uint8_t get_oled_mode_from_layer(uint8_t layer) {
-    switch (layer) {
-        case 3:
-            return OLED_MODE_VSCROLL;
-        case 4:
-            return OLED_MODE_HSCROLL;
-        default:
-            return OLED_MODE_MOVE;
+static void oled_write_u8(uint8_t value) {
+    if (value >= 100) {
+        oled_write_char('0' + value / 100, false);
+        value %= 100;
+        oled_write_char('0' + value / 10, false);
+        oled_write_char('0' + value % 10, false);
+    } else if (value >= 10) {
+        oled_write_char('0' + value / 10, false);
+        oled_write_char('0' + value % 10, false);
+    } else {
+        oled_write_char('0' + value, false);
     }
-}
-
-static void collect_oled_status(void) {
-    uint8_t layer = get_highest_layer(layer_state);
-    led_t led     = host_keyboard_led_state();
-
-    oled_status.layer  = layer;
-    oled_status.cpi    = oled_cpi_value;
-    oled_status.scr    = oled_scr_value;
-    oled_status.caps   = led.caps_lock;
-    oled_status.num    = led.num_lock;
-    oled_status.mode   = get_oled_mode_from_layer(layer);
-}
-
-static void oled_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
-    if (in_buflen == sizeof(oled_status_t)) {
-        memcpy(&oled_status, in_data, sizeof(oled_status_t));
-    }
-}
-
-void keyboard_post_init_user(void) {
-    transaction_register_rpc(USER_SYNC_A, oled_sync_slave_handler);
-}
-
-void housekeeping_task_user(void) {
-    static uint32_t last_sync = 0;
-
-    if (!is_keyboard_master()) {
-        return;
-    }
-
-    collect_oled_status();
-
-    if (timer_elapsed32(last_sync) > 100) {
-        transaction_rpc_exec(USER_SYNC_A, sizeof(oled_status_t), &oled_status, 0, NULL);
-        last_sync = timer_read32();
-    }
-}
-
-static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
-    for (uint8_t i = 0; i < w; i++) {
-        for (uint8_t j = 0; j < h; j++) {
-            oled_write_pixel(x + i, y + j, true);
-        }
-    }
-}
-
-static void draw_segment(uint8_t segment) {
-    const uint8_t x = 46;
-    const uint8_t y = 5;
-    const uint8_t h = 58;
-    const uint8_t w = 20;
-    const uint8_t t = 4;
-
-    switch (segment) {
-        case 0:
-            draw_rect(x, y + t, t, w - t * 2);
-            break;
-        case 1:
-            draw_rect(x + t, y + w - t, h / 2 - t, t);
-            break;
-        case 2:
-            draw_rect(x + h / 2, y + w - t, h / 2 - t, t);
-            break;
-        case 3:
-            draw_rect(x + h - t, y + t, t, w - t * 2);
-            break;
-        case 4:
-            draw_rect(x + h / 2, y, h / 2 - t, t);
-            break;
-        case 5:
-            draw_rect(x + t, y, h / 2 - t, t);
-            break;
-        case 6:
-            draw_rect(x + h / 2 - t / 2, y + t, t, w - t * 2);
-            break;
-    }
-}
-
-static void draw_big_digit(uint8_t digit) {
-    switch (digit) {
-        case 0:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
-            draw_segment(3);
-            draw_segment(4);
-            draw_segment(5);
-            break;
-
-        case 1:
-            draw_segment(1);
-            draw_segment(2);
-            break;
-
-        case 2:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(6);
-            draw_segment(4);
-            draw_segment(3);
-            break;
-
-        case 3:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(6);
-            draw_segment(2);
-            draw_segment(3);
-            break;
-
-        case 4:
-            draw_segment(5);
-            draw_segment(6);
-            draw_segment(1);
-            draw_segment(2);
-            break;
-
-        case 5:
-            draw_segment(0);
-            draw_segment(5);
-            draw_segment(6);
-            draw_segment(2);
-            draw_segment(3);
-            break;
-
-        case 6:
-            draw_segment(0);
-            draw_segment(5);
-            draw_segment(6);
-            draw_segment(4);
-            draw_segment(2);
-            draw_segment(3);
-            break;
-
-        case 7:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
-            break;
-
-        case 8:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
-            draw_segment(3);
-            draw_segment(4);
-            draw_segment(5);
-            draw_segment(6);
-            break;
-
-        case 9:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
-            draw_segment(3);
-            draw_segment(5);
-            draw_segment(6);
-            break;
-
-        default:
-            oled_set_cursor(7, 2);
-            oled_write_P(PSTR("?"), false);
-            break;
-    }
-}
-
-static void oled_write_digit(uint8_t value) {
-    oled_write_char('0' + value, false);
-}
-
-static void render_slave_status_text(void) {
-    oled_set_cursor(0, 0);
-    oled_write_P(PSTR("CPI:"), false);
-    oled_write_digit(oled_status.cpi);
-
-    oled_set_cursor(0, 1);
-    oled_write_P(PSTR("SCR:"), false);
-    oled_write_digit(oled_status.scr);
-
-    oled_set_cursor(0, 2);
-    oled_write_P(PSTR("CAP:"), false);
-    oled_write_P(oled_status.caps ? PSTR("ON ") : PSTR("OFF"), false);
-
-    oled_set_cursor(0, 3);
-    oled_write_P(PSTR("NUM:"), false);
-    oled_write_P(oled_status.num ? PSTR("ON ") : PSTR("OFF"), false);
-
-    oled_set_cursor(11, 0);
-    oled_write_P(PSTR("LYR"), false);
-
-    oled_set_cursor(11, 1);
-    oled_write_P(PSTR("MD:"), false);
-    switch (oled_status.mode) {
-        case OLED_MODE_VSCROLL:
-            oled_write_P(PSTR("VSC"), false);
-            break;
-        case OLED_MODE_HSCROLL:
-            oled_write_P(PSTR("HSC"), false);
-            break;
-        default:
-            oled_write_P(PSTR("MOV"), false);
-            break;
-    }
-
-    oled_set_cursor(11, 2);
-    oled_write_P(PSTR("SD:"), false);
-    oled_write_P(is_keyboard_master() ? PSTR("MST") : PSTR("SLV"), false);
 }
 
 static void render_slave_oled(void) {
+    uint8_t layer = get_highest_layer(layer_state);
+    led_t led     = host_keyboard_led_state();
+
     oled_clear();
 
-    render_slave_status_text();
-    draw_big_digit(oled_status.layer);
+    oled_set_cursor(0, 0);
+    oled_write_P(PSTR("LYR : "), false);
+    oled_write_u8(layer);
+
+    oled_set_cursor(0, 1);
+    oled_write_P(PSTR("CPI : "), false);
+    oled_write_u8(oled_cpi_value);
+
+    oled_set_cursor(0, 2);
+    oled_write_P(PSTR("SCR : "), false);
+    oled_write_u8(oled_scr_value);
+
+    oled_set_cursor(0, 3);
+    oled_write_P(PSTR("CAPS: "), false);
+    oled_write_P(led.caps_lock ? PSTR("ON") : PSTR("OFF"), false);
 }
 
 // マスター側OLED。
-// ケーブルを接続している側は、Keyball標準情報を維持する。
+// ケーブルを接続している側は、Keyball標準表示を維持する。
 void oledkit_render_info_user(void) {
     keyball_oled_render_keyinfo();
     keyball_oled_render_ballinfo();
@@ -394,7 +179,7 @@ void oledkit_render_info_user(void) {
 }
 
 // スレーブ側OLED。
-// ケーブルを接続していない側は、カスタム表示にする。
+// ケーブルを接続していない側は、軽量なカスタム表示にする。
 void oledkit_render_logo_user(void) {
     render_slave_oled();
 }
