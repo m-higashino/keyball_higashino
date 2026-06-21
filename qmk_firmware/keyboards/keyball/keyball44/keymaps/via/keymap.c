@@ -95,12 +95,12 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 #    endif
 
 typedef struct {
-    uint8_t cpi;
-    uint8_t scr;
+    uint16_t cpi;
+    uint8_t  scr;
 } oled_sync_t;
 
 static oled_sync_t oled_sync = {
-    .cpi = 5,
+    .cpi = 0,
     .scr = 5,
 };
 
@@ -115,9 +115,11 @@ static void oled_sync_handler(uint8_t in_buflen, const void *in_data, uint8_t ou
 #    endif
 
 void keyboard_post_init_user(void) {
-    // SCRの実動作初期値を5に揃える。
-    // EEPROMに4が残っていても、起動時に5へ上書きする。
-    keyball_set_scroll_div(5);
+    if (is_keyboard_master()) {
+        // SCRの実動作初期値を5に揃える。
+        // EEPROMに4が残っていても、起動時に5へ上書きする。
+        keyball_set_scroll_div(5);
+    }
 
 #    ifdef SPLIT_KEYBOARD
     if (!is_keyboard_master()) {
@@ -126,7 +128,7 @@ void keyboard_post_init_user(void) {
 #    endif
 }
 
-void matrix_scan_user(void) {
+static void sync_oled_values_from_master(void) {
 #    ifdef SPLIT_KEYBOARD
     static uint32_t last_sync = 0;
 
@@ -134,6 +136,8 @@ void matrix_scan_user(void) {
         return;
     }
 
+    // matrix_scan_userではなくOLED描画タイミングでだけ同期する。
+    // トラックボール処理への影響を避けるため、同期間隔は長めにする。
     if (timer_elapsed32(last_sync) > 500) {
         oled_sync.cpi = keyball_get_cpi();
         oled_sync.scr = keyball_get_scroll_div();
@@ -145,8 +149,24 @@ void matrix_scan_user(void) {
 #    endif
 }
 
-static void oled_write_u8(uint8_t value) {
-    if (value >= 100) {
+static void oled_write_u16(uint16_t value) {
+    if (value >= 10000) {
+        oled_write_char('0' + value / 10000, false);
+        value %= 10000;
+        oled_write_char('0' + value / 1000, false);
+        value %= 1000;
+        oled_write_char('0' + value / 100, false);
+        value %= 100;
+        oled_write_char('0' + value / 10, false);
+        oled_write_char('0' + value % 10, false);
+    } else if (value >= 1000) {
+        oled_write_char('0' + value / 1000, false);
+        value %= 1000;
+        oled_write_char('0' + value / 100, false);
+        value %= 100;
+        oled_write_char('0' + value / 10, false);
+        oled_write_char('0' + value % 10, false);
+    } else if (value >= 100) {
         oled_write_char('0' + value / 100, false);
         value %= 100;
         oled_write_char('0' + value / 10, false);
@@ -159,24 +179,6 @@ static void oled_write_u8(uint8_t value) {
     }
 }
 
-static uint8_t get_display_cpi(void) {
-#ifdef SPLIT_KEYBOARD
-    if (!is_keyboard_master()) {
-        return oled_sync.cpi;
-    }
-#endif
-    return keyball_get_cpi();
-}
-
-static uint8_t get_display_scr(void) {
-#ifdef SPLIT_KEYBOARD
-    if (!is_keyboard_master()) {
-        return oled_sync.scr;
-    }
-#endif
-    return keyball_get_scroll_div();
-}
-
 static void render_slave_oled(void) {
     uint8_t layer = get_highest_layer(layer_state);
     led_t led     = host_keyboard_led_state();
@@ -185,15 +187,15 @@ static void render_slave_oled(void) {
 
     oled_set_cursor(0, 0);
     oled_write_P(PSTR("LYR : "), false);
-    oled_write_u8(layer);
+    oled_write_u16(layer);
 
     oled_set_cursor(0, 1);
     oled_write_P(PSTR("CPI : "), false);
-    oled_write_u8(get_display_cpi());
+    oled_write_u16(oled_sync.cpi);
 
     oled_set_cursor(0, 2);
     oled_write_P(PSTR("SCR : "), false);
-    oled_write_u8(get_display_scr());
+    oled_write_u16(oled_sync.scr);
 
     oled_set_cursor(0, 3);
     oled_write_P(PSTR("CAPS: "), false);
@@ -202,7 +204,10 @@ static void render_slave_oled(void) {
 
 // マスター側OLED。
 // ケーブルを接続している側は、Keyball標準表示を維持する。
+// ここでだけCPI/SCRをスレーブ側へ同期する。
 void oledkit_render_info_user(void) {
+    sync_oled_values_from_master();
+
     keyball_oled_render_keyinfo();
     keyball_oled_render_ballinfo();
     keyball_oled_render_layerinfo();
