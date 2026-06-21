@@ -119,39 +119,27 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return true;
     }
 
-    // Remap/VIA で Layer 5 に入っている Kb 2 / 3 / 8 / 9 にも対応
-    // 想定:
-    //   QK_KB_2 = CPI down
-    //   QK_KB_3 = CPI up
-    //   QK_KB_8 = SCR down
-    //   QK_KB_9 = SCR up
-    //
-    // もし実機で逆だった場合は、QK_KB_8 / QK_KB_9 の増減だけ入れ替えてください。
     switch (keycode) {
         case CPI_I100:
         case CPI_I1K:
-        case QK_KB_3:
             oled_status.cpi = clamp_level(oled_status.cpi, +1);
             break;
 
         case CPI_D100:
         case CPI_D1K:
-        case QK_KB_2:
             oled_status.cpi = clamp_level(oled_status.cpi, -1);
             break;
 
         case SCRL_DVI:
-        case QK_KB_9:
             oled_status.scr = clamp_level(oled_status.scr, +1);
             break;
 
         case SCRL_DVD:
-        case QK_KB_8:
             oled_status.scr = clamp_level(oled_status.scr, -1);
             break;
     }
 
-    // Keyball標準処理は殺さない
+    // Keyball標準処理を必ず通す
     return true;
 }
 
