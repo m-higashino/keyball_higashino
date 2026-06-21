@@ -44,3 +44,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SCROLLSNAP_HORIZONTAL_SCROLL_BY_VERTICAL_MOTION
 
 #define SPLIT_LAYER_STATE_ENABLE
+
+#define SPLIT_LED_STATE_ENABLE
+#define SPLIT_TRANSPORT_MIRROR

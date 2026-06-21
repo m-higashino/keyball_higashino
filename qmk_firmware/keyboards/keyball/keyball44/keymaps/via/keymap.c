@@ -50,6 +50,20 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
     RGB_RMOD , RGB_HUD  , RGB_SAD  , RGB_VAD  , _______  , SCRL_DVD ,                                        CPI_D1K  , CPI_D100 , CPI_I100 , CPI_I1K  , _______  , KBC_SAVE ,
                   QK_BOOT  , KBC_RST  , _______  ,        _______  , _______  ,                   _______  , _______  , _______       , KBC_RST  , QK_BOOT
   ),
+
+  [4] = LAYOUT_universal(
+    RGB_TOG  , AML_TO   , AML_I50  , AML_D50  , _______  , _______  ,                                        RGB_M_P  , RGB_M_B  , RGB_M_R  , RGB_M_SW , RGB_M_SN , RGB_M_K  ,
+    RGB_MOD  , RGB_HUI  , RGB_SAI  , RGB_VAI  , _______  , SCRL_DVI ,                                        RGB_M_X  , RGB_M_G  , RGB_M_T  , RGB_M_TW , _______  , _______  ,
+    RGB_RMOD , RGB_HUD  , RGB_SAD  , RGB_VAD  , _______  , SCRL_DVD ,                                        CPI_D1K  , CPI_D100 , CPI_I100 , CPI_I1K  , _______  , KBC_SAVE ,
+                  QK_BOOT  , KBC_RST  , _______  ,        _______  , _______  ,                   _______  , _______  , _______       , KBC_RST  , QK_BOOT
+  ),
+
+  [5] = LAYOUT_universal(
+    RGB_TOG  , AML_TO   , AML_I50  , AML_D50  , _______  , _______  ,                                        RGB_M_P  , RGB_M_B  , RGB_M_R  , RGB_M_SW , RGB_M_SN , RGB_M_K  ,
+    RGB_MOD  , RGB_HUI  , RGB_SAI  , RGB_VAI  , _______  , SCRL_DVI ,                                        RGB_M_X  , RGB_M_G  , RGB_M_T  , RGB_M_TW , _______  , _______  ,
+    RGB_RMOD , RGB_HUD  , RGB_SAD  , RGB_VAD  , _______  , SCRL_DVD ,                                        CPI_D1K  , CPI_D100 , CPI_I100 , CPI_I1K  , _______  , KBC_SAVE ,
+                  QK_BOOT  , KBC_RST  , _______  ,        _______  , _______  ,                   _______  , _______  , _______       , KBC_RST  , QK_BOOT
+  ),
 };
 // clang-format on
 
@@ -75,17 +89,126 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 #ifdef OLED_ENABLE
 
 #    include "lib/oledkit/oledkit.h"
+#    include "transactions.h"
+#    include <string.h>
 
-void oledkit_render_info_user(void) {
-    keyball_oled_render_keyinfo();
-    keyball_oled_render_ballinfo();
-    keyball_oled_render_layerinfo();
+typedef struct {
+    uint8_t layer;
+    uint8_t cpi;
+    uint8_t scr;
+    bool    caps;
+    bool    num;
+    uint8_t mode;
+    bool    master;
+} oled_status_t;
+
+enum {
+    OLED_MODE_MOVE = 0,
+    OLED_MODE_VSCROLL,
+    OLED_MODE_HSCROLL,
+};
+
+static uint8_t oled_cpi_value = 5;
+static uint8_t oled_scr_value = 5;
+
+static oled_status_t oled_status = {
+    .layer  = 0,
+    .cpi    = 5,
+    .scr    = 5,
+    .caps   = false,
+    .num    = false,
+    .mode   = OLED_MODE_MOVE,
+    .master = false,
+};
+
+static uint8_t clamp_1_to_9(uint8_t value) {
+    if (value < 1) {
+        return 1;
+    }
+    if (value > 9) {
+        return 9;
+    }
+    return value;
 }
-#endif
 
-#ifdef OLED_ENABLE
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (record->event.pressed) {
+        switch (keycode) {
+            case CPI_I100:
+            case CPI_I1K:
+                oled_cpi_value = clamp_1_to_9(oled_cpi_value + 1);
+                break;
 
-#    include "lib/oledkit/oledkit.h"
+            case CPI_D100:
+            case CPI_D1K:
+                if (oled_cpi_value > 1) {
+                    oled_cpi_value--;
+                }
+                break;
+
+            case SCRL_DVI:
+                oled_scr_value = clamp_1_to_9(oled_scr_value + 1);
+                break;
+
+            case SCRL_DVD:
+                if (oled_scr_value > 1) {
+                    oled_scr_value--;
+                }
+                break;
+        }
+    }
+
+    return true;
+}
+
+static uint8_t get_oled_mode_from_layer(uint8_t layer) {
+    switch (layer) {
+        case 3:
+            return OLED_MODE_VSCROLL;
+        case 4:
+            return OLED_MODE_HSCROLL;
+        default:
+            return OLED_MODE_MOVE;
+    }
+}
+
+static void collect_oled_status(void) {
+    uint8_t layer = get_highest_layer(layer_state);
+    led_t led     = host_keyboard_led_state();
+
+    oled_status.layer  = layer;
+    oled_status.cpi    = oled_cpi_value;
+    oled_status.scr    = oled_scr_value;
+    oled_status.caps   = led.caps_lock;
+    oled_status.num    = led.num_lock;
+    oled_status.mode   = get_oled_mode_from_layer(layer);
+    oled_status.master = is_keyboard_master();
+}
+
+static void oled_sync_slave_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
+    if (in_buflen == sizeof(oled_status_t)) {
+        memcpy(&oled_status, in_data, sizeof(oled_status_t));
+    }
+}
+
+void keyboard_post_init_user(void) {
+    transaction_register_rpc(USER_SYNC_A, oled_sync_slave_handler);
+}
+
+void housekeeping_task_user(void) {
+    static uint32_t last_sync = 0;
+
+    if (!is_keyboard_master()) {
+        return;
+    }
+
+    collect_oled_status();
+
+    if (timer_elapsed32(last_sync) > 100) {
+        transaction_rpc_send(USER_SYNC_A, sizeof(oled_status_t), &oled_status);
+        last_sync = timer_read32();
+    }
+}
 
 static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
     for (uint8_t i = 0; i < w; i++) {
@@ -96,55 +219,39 @@ static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
 }
 
 static void draw_segment(uint8_t segment) {
-    // 反対側OLEDを縦向きに見たときに、数字が縦方向に見える7セグ表示
-    //
-    // OLEDの論理サイズは 128x32 のままですが、
-    // Keyball上では物理的に横向きに見えるため、
-    // x方向を「縦の長さ」として使います。
-
-    const uint8_t x = 30;  // 数字の縦位置。小さいほど上寄せ
-    const uint8_t y = 5;   // 数字の横位置。小さいほど左寄せ
-    const uint8_t h = 68;  // 数字の高さ
-    const uint8_t w = 22;  // 数字の幅
-    const uint8_t t = 4;   // 線の太さ
+    const uint8_t x = 46;
+    const uint8_t y = 5;
+    const uint8_t h = 58;
+    const uint8_t w = 20;
+    const uint8_t t = 4;
 
     switch (segment) {
-        case 0:  // 上
+        case 0:
             draw_rect(x, y + t, t, w - t * 2);
             break;
-
-        case 1:  // 右上
+        case 1:
             draw_rect(x + t, y + w - t, h / 2 - t, t);
             break;
-
-        case 2:  // 右下
+        case 2:
             draw_rect(x + h / 2, y + w - t, h / 2 - t, t);
             break;
-
-        case 3:  // 下
+        case 3:
             draw_rect(x + h - t, y + t, t, w - t * 2);
             break;
-
-        case 4:  // 左下
+        case 4:
             draw_rect(x + h / 2, y, h / 2 - t, t);
             break;
-
-        case 5:  // 左上
+        case 5:
             draw_rect(x + t, y, h / 2 - t, t);
             break;
-
-        case 6:  // 中央
+        case 6:
             draw_rect(x + h / 2 - t / 2, y + t, t, w - t * 2);
             break;
     }
 }
 
-static void render_big_layer_number(void) {
-    uint8_t layer = get_highest_layer(layer_state);
-
-    oled_clear();
-
-    switch (layer) {
+static void draw_big_digit(uint8_t digit) {
+    switch (digit) {
         case 0:
             draw_segment(0);
             draw_segment(1);
@@ -225,15 +332,74 @@ static void render_big_layer_number(void) {
             break;
 
         default:
-            oled_set_cursor(6, 1);
+            oled_set_cursor(7, 2);
             oled_write_P(PSTR("?"), false);
             break;
     }
 }
 
-// これが「ケーブルを接続していない側」のOLED表示
+static void oled_write_digit(uint8_t value) {
+    oled_write_char('0' + value, false);
+}
+
+static void render_slave_status_text(void) {
+    oled_set_cursor(0, 0);
+    oled_write_P(PSTR("CPI:"), false);
+    oled_write_digit(oled_status.cpi);
+
+    oled_set_cursor(0, 1);
+    oled_write_P(PSTR("SCR:"), false);
+    oled_write_digit(oled_status.scr);
+
+    oled_set_cursor(0, 2);
+    oled_write_P(PSTR("CAP:"), false);
+    oled_write_P(oled_status.caps ? PSTR("ON ") : PSTR("OFF"), false);
+
+    oled_set_cursor(0, 3);
+    oled_write_P(PSTR("NUM:"), false);
+    oled_write_P(oled_status.num ? PSTR("ON ") : PSTR("OFF"), false);
+
+    oled_set_cursor(11, 0);
+    oled_write_P(PSTR("LYR"), false);
+
+    oled_set_cursor(11, 1);
+    oled_write_P(PSTR("MD:"), false);
+    switch (oled_status.mode) {
+        case OLED_MODE_VSCROLL:
+            oled_write_P(PSTR("VSC"), false);
+            break;
+        case OLED_MODE_HSCROLL:
+            oled_write_P(PSTR("HSC"), false);
+            break;
+        default:
+            oled_write_P(PSTR("MOV"), false);
+            break;
+    }
+
+    oled_set_cursor(11, 2);
+    oled_write_P(PSTR("SD:"), false);
+    oled_write_P(oled_status.master ? PSTR("MST") : PSTR("SLV"), false);
+}
+
+static void render_slave_oled(void) {
+    oled_clear();
+
+    render_slave_status_text();
+    draw_big_digit(oled_status.layer);
+}
+
+// マスター側OLED。
+// ケーブルを接続している側は、Keyball標準情報を維持する。
+void oledkit_render_info_user(void) {
+    keyball_oled_render_keyinfo();
+    keyball_oled_render_ballinfo();
+    keyball_oled_render_layerinfo();
+}
+
+// スレーブ側OLED。
+// ケーブルを接続していない側は、カスタム表示にする。
 void oledkit_render_logo_user(void) {
-    render_big_layer_number();
+    render_slave_oled();
 }
 
 #endif
