@@ -115,14 +115,17 @@ static void oled_sync_handler(uint8_t in_buflen, const void *in_data, uint8_t ou
 #    endif
 
 void keyboard_post_init_user(void) {
-    // SCRの実動作初期値を5に揃える。
-    // EEPROMに4が残っていても、起動時に5へ上書きする。
-    keyball_set_scroll_div(5);
-
 #    ifdef SPLIT_KEYBOARD
     if (!is_keyboard_master()) {
         transaction_register_rpc(OLED_SYNC, oled_sync_handler);
     }
+
+    // SCRの実動作初期値はmaster側で管理する。
+    if (is_keyboard_master()) {
+        keyball_set_scroll_div(5);
+    }
+#    else
+    keyball_set_scroll_div(5);
 #    endif
 }
 
@@ -130,11 +133,11 @@ void matrix_scan_user(void) {
 #    ifdef SPLIT_KEYBOARD
     static uint32_t last_sync = 0;
 
-    if (!is_keyboard_master()) {
-        return;
-    }
-
-    if (timer_elapsed32(last_sync) > 200) {
+    // OLED同期だけをmaster側に限定する。
+    // slave側ではreturnしない。
+    // トラックボール搭載側がslaveの場合、ここでreturnすると
+    // Keyball側の処理を阻害する可能性がある。
+    if (is_keyboard_master() && timer_elapsed32(last_sync) > 200) {
         oled_sync.cpi = keyball_get_cpi();
         oled_sync.scr = keyball_get_scroll_div();
 
@@ -183,21 +186,27 @@ static void render_slave_oled(void) {
 
     oled_clear();
 
+    // 1行目：レイヤーとCPIを大きめに見せるため短縮表示
     oled_set_cursor(0, 0);
-    oled_write_P(PSTR("LYR : "), false);
+    oled_write_P(PSTR("L"), false);
     oled_write_u8(layer);
-
-    oled_set_cursor(0, 1);
-    oled_write_P(PSTR("CPI : "), false);
+    oled_write_P(PSTR(" C"), false);
     oled_write_u8(get_display_cpi());
 
-    oled_set_cursor(0, 2);
-    oled_write_P(PSTR("SCR : "), false);
+    // 2行目：SCR
+    oled_set_cursor(0, 1);
+    oled_write_P(PSTR("S"), false);
     oled_write_u8(get_display_scr());
 
+    // 3行目：Caps Lock
+    oled_set_cursor(0, 2);
+    oled_write_P(PSTR("CAP "), false);
+    oled_write_P(led.caps_lock ? PSTR("ON") : PSTR("--"), false);
+
+    // 4行目：Num Lock
     oled_set_cursor(0, 3);
-    oled_write_P(PSTR("CAPS: "), false);
-    oled_write_P(led.caps_lock ? PSTR("ON") : PSTR("OFF"), false);
+    oled_write_P(PSTR("NUM "), false);
+    oled_write_P(led.num_lock ? PSTR("ON") : PSTR("--"), false);
 }
 
 // マスター側OLED。
