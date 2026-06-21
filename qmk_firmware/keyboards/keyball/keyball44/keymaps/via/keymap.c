@@ -10,6 +10,7 @@ the Free Software Foundation, either version 2 of the License, or
 
 #include QMK_KEYBOARD_H
 #include "quantum.h"
+#include <string.h>
 
 #ifdef OLED_ENABLE
 #    include "lib/oledkit/oledkit.h"
