@@ -42,7 +42,7 @@ typedef struct {
 
 static oled_status_t oled_status = {
     .cpi = 5,
-    .scr = 5,
+    .scr = 4,
     .caps = false,
     .num = false,
 };
@@ -119,28 +119,39 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         return true;
     }
 
+    // Remap/VIA で Layer 5 に入っている Kb 2 / 3 / 8 / 9 にも対応
+    // 想定:
+    //   QK_KB_2 = CPI down
+    //   QK_KB_3 = CPI up
+    //   QK_KB_8 = SCR down
+    //   QK_KB_9 = SCR up
+    //
+    // もし実機で逆だった場合は、QK_KB_8 / QK_KB_9 の増減だけ入れ替えてください。
     switch (keycode) {
         case CPI_I100:
         case CPI_I1K:
+        case QK_KB_3:
             oled_status.cpi = clamp_level(oled_status.cpi, +1);
             break;
 
         case CPI_D100:
         case CPI_D1K:
+        case QK_KB_2:
             oled_status.cpi = clamp_level(oled_status.cpi, -1);
             break;
 
         case SCRL_DVI:
+        case QK_KB_9:
             oled_status.scr = clamp_level(oled_status.scr, +1);
             break;
 
         case SCRL_DVD:
+        case QK_KB_8:
             oled_status.scr = clamp_level(oled_status.scr, -1);
             break;
     }
 
-    // 重要:
-    // Keyball標準のCPI/SCR処理を壊さないため、必ず true を返す。
+    // Keyball標準処理は殺さない
     return true;
 }
 
@@ -230,9 +241,21 @@ static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
     }
 }
 
+static uint8_t mirror_segment_h(uint8_t segment) {
+    switch (segment) {
+        case 1: return 5;  // 右上 -> 左上
+        case 2: return 4;  // 右下 -> 左下
+        case 4: return 2;  // 左下 -> 右下
+        case 5: return 1;  // 左上 -> 右上
+        default: return segment; // 0,3,6 はそのまま
+    }
+}
+
 // KeyballのOLEDは物理的に縦向きに見るため、
 // 論理OLEDのX方向を「縦方向」として使う7セグ描画。
 static void draw_segment_at(uint8_t x, uint8_t y, uint8_t h, uint8_t w, uint8_t t, uint8_t segment) {
+    segment = mirror_segment_h(segment);
+
     switch (segment) {
         case 0:
             draw_rect(x, y + t, t, w - t * 2);
