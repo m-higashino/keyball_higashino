@@ -90,47 +90,59 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
 #    include "lib/oledkit/oledkit.h"
 
-static uint8_t oled_cpi_value = 5;
-static uint8_t oled_scr_value = 5;
+#    ifdef SPLIT_KEYBOARD
+#        include "transactions.h"
+#    endif
 
-static uint8_t clamp_1_to_9(uint8_t value) {
-    if (value < 1) {
-        return 1;
+typedef struct {
+    uint8_t cpi;
+    uint8_t scr;
+} oled_sync_t;
+
+static oled_sync_t oled_sync = {
+    .cpi = 5,
+    .scr = 5,
+};
+
+#    ifdef SPLIT_KEYBOARD
+static void oled_sync_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
+    if (in_buflen == sizeof(oled_sync_t)) {
+        const oled_sync_t *recv = (const oled_sync_t *)in_data;
+        oled_sync.cpi = recv->cpi;
+        oled_sync.scr = recv->scr;
     }
-    if (value > 9) {
-        return 9;
+}
+#    endif
+
+void keyboard_post_init_user(void) {
+    // SCRの実動作初期値を5に揃える。
+    // EEPROMに4が残っていても、起動時に5へ上書きする。
+    keyball_set_scroll_div(5);
+
+#    ifdef SPLIT_KEYBOARD
+    if (!is_keyboard_master()) {
+        transaction_register_rpc(OLED_SYNC, oled_sync_handler);
     }
-    return value;
+#    endif
 }
 
-bool process_record_user(uint16_t keycode, keyrecord_t *record) {
-    if (record->event.pressed) {
-        switch (keycode) {
-            case CPI_I100:
-            case CPI_I1K:
-                oled_cpi_value = clamp_1_to_9(oled_cpi_value + 1);
-                break;
+void matrix_scan_user(void) {
+#    ifdef SPLIT_KEYBOARD
+    static uint32_t last_sync = 0;
 
-            case CPI_D100:
-            case CPI_D1K:
-                if (oled_cpi_value > 1) {
-                    oled_cpi_value--;
-                }
-                break;
-
-            case SCRL_DVI:
-                oled_scr_value = clamp_1_to_9(oled_scr_value + 1);
-                break;
-
-            case SCRL_DVD:
-                if (oled_scr_value > 1) {
-                    oled_scr_value--;
-                }
-                break;
-        }
+    if (!is_keyboard_master()) {
+        return;
     }
 
-    return true;
+    if (timer_elapsed32(last_sync) > 200) {
+        oled_sync.cpi = keyball_get_cpi();
+        oled_sync.scr = keyball_get_scroll_div();
+
+        transaction_rpc_send(OLED_SYNC, sizeof(oled_sync), &oled_sync);
+
+        last_sync = timer_read32();
+    }
+#    endif
 }
 
 static void oled_write_u8(uint8_t value) {
@@ -147,6 +159,24 @@ static void oled_write_u8(uint8_t value) {
     }
 }
 
+static uint8_t get_display_cpi(void) {
+#ifdef SPLIT_KEYBOARD
+    if (!is_keyboard_master()) {
+        return oled_sync.cpi;
+    }
+#endif
+    return keyball_get_cpi();
+}
+
+static uint8_t get_display_scr(void) {
+#ifdef SPLIT_KEYBOARD
+    if (!is_keyboard_master()) {
+        return oled_sync.scr;
+    }
+#endif
+    return keyball_get_scroll_div();
+}
+
 static void render_slave_oled(void) {
     uint8_t layer = get_highest_layer(layer_state);
     led_t led     = host_keyboard_led_state();
@@ -159,11 +189,11 @@ static void render_slave_oled(void) {
 
     oled_set_cursor(0, 1);
     oled_write_P(PSTR("CPI : "), false);
-    oled_write_u8(oled_cpi_value);
+    oled_write_u8(get_display_cpi());
 
     oled_set_cursor(0, 2);
     oled_write_P(PSTR("SCR : "), false);
-    oled_write_u8(oled_scr_value);
+    oled_write_u8(get_display_scr());
 
     oled_set_cursor(0, 3);
     oled_write_P(PSTR("CAPS: "), false);
