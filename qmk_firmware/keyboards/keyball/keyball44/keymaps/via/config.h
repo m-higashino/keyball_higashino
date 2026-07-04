@@ -39,3 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define AUTO_MOUSE_DEFAULT_LAYER 1
 
 #define DYNAMIC_KEYMAP_LAYER_COUNT 8
+
+#define KEYBALL_SCROLLSNAP_ENABLE 2
+#define SCROLLSNAP_HORIZONTAL_SCROLL_BY_VERTICAL_MOTION
