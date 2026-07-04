@@ -75,10 +75,219 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 #ifdef OLED_ENABLE
 
 #    include "lib/oledkit/oledkit.h"
+#    include "transactions.h"
+
+enum custom_transaction_id {
+    OLED_SYNC = 0,
+};
+
+typedef struct {
+    uint8_t layer;
+    uint8_t cpi;
+} oled_sync_t;
+
+static oled_sync_t oled_sync = {
+    .layer = 0,
+    .cpi = 5,
+};
+
+static uint32_t oled_sync_timer = 0;
+
+static void oled_sync_handler(uint8_t in_buflen, const void *in_data, uint8_t out_buflen, void *out_data) {
+    const oled_sync_t *recv = (const oled_sync_t *)in_data;
+
+    oled_sync.layer = recv->layer;
+    oled_sync.cpi   = recv->cpi;
+}
+
+void keyboard_post_init_user(void) {
+    if (!is_keyboard_master()) {
+        transaction_register_rpc(OLED_SYNC, oled_sync_handler);
+    }
+}
+
+void matrix_scan_user(void) {
+    if (is_keyboard_master()) {
+        if (timer_elapsed32(oled_sync_timer) > 500) {
+            oled_sync_timer = timer_read32();
+
+            oled_sync_t data = {
+                .layer = get_highest_layer(layer_state),
+                .cpi   = keyball_get_cpi(),
+            };
+
+            transaction_rpc_send(OLED_SYNC, sizeof(data), &data);
+        }
+    }
+}
+
+static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
+    for (uint8_t i = 0; i < w; i++) {
+        for (uint8_t j = 0; j < h; j++) {
+            oled_write_pixel(x + i, y + j, true);
+        }
+    }
+}
+
+static void draw_segment_at(uint8_t segment, uint8_t x, uint8_t y, uint8_t h, uint8_t w, uint8_t t) {
+    switch (segment) {
+        case 0:  // 上
+            draw_rect(x, y + t, t, w - t * 2);
+            break;
+        case 1:  // 右上
+            draw_rect(x + t, y + w - t, h / 2 - t, t);
+            break;
+        case 2:  // 右下
+            draw_rect(x + h / 2, y + w - t, h / 2 - t, t);
+            break;
+        case 3:  // 下
+            draw_rect(x + h - t, y + t, t, w - t * 2);
+            break;
+        case 4:  // 左下
+            draw_rect(x + h / 2, y, h / 2 - t, t);
+            break;
+        case 5:  // 左上
+            draw_rect(x + t, y, h / 2 - t, t);
+            break;
+        case 6:  // 中央
+            draw_rect(x + h / 2 - t / 2, y + t, t, w - t * 2);
+            break;
+    }
+}
+
+static void draw_7seg_digit(uint8_t digit, uint8_t x, uint8_t y, uint8_t h, uint8_t w, uint8_t t) {
+    digit %= 10;
+
+    switch (digit) {
+        case 0:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            draw_segment_at(3, x, y, h, w, t);
+            draw_segment_at(4, x, y, h, w, t);
+            draw_segment_at(5, x, y, h, w, t);
+            break;
+
+        case 1:
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            break;
+
+        case 2:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(6, x, y, h, w, t);
+            draw_segment_at(4, x, y, h, w, t);
+            draw_segment_at(3, x, y, h, w, t);
+            break;
+
+        case 3:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(6, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            draw_segment_at(3, x, y, h, w, t);
+            break;
+
+        case 4:
+            draw_segment_at(5, x, y, h, w, t);
+            draw_segment_at(6, x, y, h, w, t);
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            break;
+
+        case 5:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(5, x, y, h, w, t);
+            draw_segment_at(6, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            draw_segment_at(3, x, y, h, w, t);
+            break;
+
+        case 6:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(5, x, y, h, w, t);
+            draw_segment_at(6, x, y, h, w, t);
+            draw_segment_at(4, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            draw_segment_at(3, x, y, h, w, t);
+            break;
+
+        case 7:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            break;
+
+        case 8:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            draw_segment_at(3, x, y, h, w, t);
+            draw_segment_at(4, x, y, h, w, t);
+            draw_segment_at(5, x, y, h, w, t);
+            draw_segment_at(6, x, y, h, w, t);
+            break;
+
+        case 9:
+            draw_segment_at(0, x, y, h, w, t);
+            draw_segment_at(1, x, y, h, w, t);
+            draw_segment_at(2, x, y, h, w, t);
+            draw_segment_at(3, x, y, h, w, t);
+            draw_segment_at(5, x, y, h, w, t);
+            draw_segment_at(6, x, y, h, w, t);
+            break;
+    }
+}
+
+static void render_slave_oled(void) {
+    oled_clear();
+
+    /*
+     * Keyball OLEDは論理サイズ128x32。
+     * 実機では横向きに見えるため、
+     * x方向を縦方向として使う。
+     *
+     * 上側7割：LYR
+     * 下側3割：CPI
+     */
+
+    // レイヤー番号：大きく表示
+    oled_set_cursor(0, 0);
+    oled_write_P(PSTR("LYR"), false);
+
+    draw_7seg_digit(
+        oled_sync.layer,
+        28,  // x: 数字の縦位置
+        4,   // y: 数字の横位置
+        68,  // h: 高さ
+        22,  // w: 幅
+        4    // t: 太さ
+    );
+
+    // CPI：小さめに表示
+    oled_set_cursor(0, 3);
+    oled_write_P(PSTR("CPI"), false);
+
+    draw_7seg_digit(
+        oled_sync.cpi,
+        96,  // x: 下側に配置
+        6,   // y
+        28,  // h: 小さめ
+        14,  // w
+        3    // t
+    );
+}
 
 void oledkit_render_info_user(void) {
     keyball_oled_render_keyinfo();
     keyball_oled_render_ballinfo();
     keyball_oled_render_layerinfo();
 }
+
+void oledkit_render_logo_user(void) {
+    render_slave_oled();
+}
+
 #endif
+
