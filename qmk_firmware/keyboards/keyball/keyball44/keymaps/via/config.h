@@ -45,3 +45,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SCROLLSNAP_HORIZONTAL_SCROLL_BY_VERTICAL_MOTION
 
 #define OLED_TIMEOUT 0
+
+#define SPLIT_LAYER_STATE_ENABLE
