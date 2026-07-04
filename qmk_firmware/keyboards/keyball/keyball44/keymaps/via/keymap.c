@@ -76,12 +76,6 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
 #    include "lib/oledkit/oledkit.h"
 
-void oledkit_render_info_user(void) {
-    keyball_oled_render_keyinfo();
-    keyball_oled_render_ballinfo();
-    keyball_oled_render_layerinfo();
-}
-
 static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
     for (uint8_t i = 0; i < w; i++) {
         for (uint8_t j = 0; j < h; j++) {
@@ -224,6 +218,12 @@ static void render_big_layer_number(void) {
             oled_write_P(PSTR("?"), false);
             break;
     }
+}
+
+void oledkit_render_info_user(void) {
+    keyball_oled_render_keyinfo();
+    keyball_oled_render_ballinfo();
+    keyball_oled_render_layerinfo();
 }
 
 // これが「ケーブルを接続していない側」のOLED表示
