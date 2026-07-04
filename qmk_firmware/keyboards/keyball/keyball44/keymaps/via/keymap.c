@@ -76,6 +76,35 @@ layer_state_t layer_state_set_user(layer_state_t state) {
 
 #    include "lib/oledkit/oledkit.h"
 
+typedef struct {
+    uint8_t x;
+    uint8_t y;
+    uint8_t h;
+    uint8_t w;
+    uint8_t t;
+} sevenseg_config_t;
+
+enum sevenseg_segment {
+    SEG_TOP = 0,
+    SEG_RIGHT_TOP,
+    SEG_RIGHT_BOTTOM,
+    SEG_BOTTOM,
+    SEG_LEFT_BOTTOM,
+    SEG_LEFT_TOP,
+    SEG_CENTER,
+};
+
+static const sevenseg_config_t sevenseg_cfg = {
+    .x = 30,  // 数字の縦位置。小さいほど上寄せ
+    .y = 5,   // 数字の横位置。小さいほど左寄せ
+    .h = 68,  // 数字の高さ
+    .w = 22,  // 数字の幅
+    .t = 4,   // 線の太さ
+};
+
+// 実機で左右反転して見える場合は true
+static const bool sevenseg_mirror_horizontal = true;
+
 static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
     for (uint8_t i = 0; i < w; i++) {
         for (uint8_t j = 0; j < h; j++) {
@@ -84,133 +113,137 @@ static void draw_rect(uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
     }
 }
 
-static void draw_segment(uint8_t segment) {
-    // 反対側OLEDを縦向きに見たときに、数字が縦方向に見える7セグ表示
-    //
-    // OLEDの論理サイズは 128x32 のままですが、
-    // Keyball上では物理的に横向きに見えるため、
-    // x方向を「縦の長さ」として使います。
+// 7セグ数字のローカル座標で矩形を描画する
+// lx: 数字内の縦方向位置
+// ly: 数字内の横方向位置
+// lw: 矩形の縦方向サイズ
+// lh: 矩形の横方向サイズ
+static void draw_digit_rect(uint8_t lx, uint8_t ly, uint8_t lw, uint8_t lh) {
+    const sevenseg_config_t *c = &sevenseg_cfg;
 
-    const uint8_t x = 30;  // 数字の縦位置。小さいほど上寄せ
-    const uint8_t y = 5;   // 数字の横位置。小さいほど左寄せ
-    const uint8_t h = 68;  // 数字の高さ
-    const uint8_t w = 22;  // 数字の幅
-    const uint8_t t = 4;   // 線の太さ
+    if (sevenseg_mirror_horizontal) {
+        ly = c->w - ly - lh;
+    }
+
+    draw_rect(c->x + lx, c->y + ly, lw, lh);
+}
+
+static void draw_segment(uint8_t segment) {
+    const sevenseg_config_t *c = &sevenseg_cfg;
+    const uint8_t h = c->h;
+    const uint8_t w = c->w;
+    const uint8_t t = c->t;
 
     switch (segment) {
-        case 0:  // 上
-            draw_rect(x, y + t, t, w - t * 2);
+        case SEG_TOP:
+            draw_digit_rect(0, t, t, w - t * 2);
             break;
 
-        case 1:  // 右上
-            draw_rect(x + t, y + w - t, h / 2 - t, t);
+        case SEG_RIGHT_TOP:
+            draw_digit_rect(t, w - t, h / 2 - t, t);
             break;
 
-        case 2:  // 右下
-            draw_rect(x + h / 2, y + w - t, h / 2 - t, t);
+        case SEG_RIGHT_BOTTOM:
+            draw_digit_rect(h / 2, w - t, h / 2 - t, t);
             break;
 
-        case 3:  // 下
-            draw_rect(x + h - t, y + t, t, w - t * 2);
+        case SEG_BOTTOM:
+            draw_digit_rect(h - t, t, t, w - t * 2);
             break;
 
-        case 4:  // 左下
-            draw_rect(x + h / 2, y, h / 2 - t, t);
+        case SEG_LEFT_BOTTOM:
+            draw_digit_rect(h / 2, 0, h / 2 - t, t);
             break;
 
-        case 5:  // 左上
-            draw_rect(x + t, y, h / 2 - t, t);
+        case SEG_LEFT_TOP:
+            draw_digit_rect(t, 0, h / 2 - t, t);
             break;
 
-        case 6:  // 中央
-            draw_rect(x + h / 2 - t / 2, y + t, t, w - t * 2);
+        case SEG_CENTER:
+            draw_digit_rect(h / 2 - t / 2, t, t, w - t * 2);
             break;
     }
 }
 
-static void render_big_layer_number(void) {
-    uint8_t layer = get_highest_layer(layer_state);
-
-    oled_clear();
-
+static void render_digit_segments(uint8_t layer) {
     switch (layer) {
         case 0:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
-            draw_segment(3);
-            draw_segment(4);
-            draw_segment(5);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_RIGHT_BOTTOM);
+            draw_segment(SEG_BOTTOM);
+            draw_segment(SEG_LEFT_BOTTOM);
+            draw_segment(SEG_LEFT_TOP);
             break;
 
         case 1:
-            draw_segment(1);
-            draw_segment(2);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_RIGHT_BOTTOM);
             break;
 
         case 2:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(6);
-            draw_segment(4);
-            draw_segment(3);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_CENTER);
+            draw_segment(SEG_LEFT_BOTTOM);
+            draw_segment(SEG_BOTTOM);
             break;
 
         case 3:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(6);
-            draw_segment(2);
-            draw_segment(3);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_CENTER);
+            draw_segment(SEG_RIGHT_BOTTOM);
+            draw_segment(SEG_BOTTOM);
             break;
 
         case 4:
-            draw_segment(5);
-            draw_segment(6);
-            draw_segment(1);
-            draw_segment(2);
+            draw_segment(SEG_LEFT_TOP);
+            draw_segment(SEG_CENTER);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_RIGHT_BOTTOM);
             break;
 
         case 5:
-            draw_segment(0);
-            draw_segment(5);
-            draw_segment(6);
-            draw_segment(2);
-            draw_segment(3);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_LEFT_TOP);
+            draw_segment(SEG_CENTER);
+            draw_segment(SEG_RIGHT_BOTTOM);
+            draw_segment(SEG_BOTTOM);
             break;
 
         case 6:
-            draw_segment(0);
-            draw_segment(5);
-            draw_segment(6);
-            draw_segment(4);
-            draw_segment(2);
-            draw_segment(3);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_LEFT_TOP);
+            draw_segment(SEG_CENTER);
+            draw_segment(SEG_LEFT_BOTTOM);
+            draw_segment(SEG_RIGHT_BOTTOM);
+            draw_segment(SEG_BOTTOM);
             break;
 
         case 7:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_RIGHT_BOTTOM);
             break;
 
         case 8:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
-            draw_segment(3);
-            draw_segment(4);
-            draw_segment(5);
-            draw_segment(6);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_RIGHT_BOTTOM);
+            draw_segment(SEG_BOTTOM);
+            draw_segment(SEG_LEFT_BOTTOM);
+            draw_segment(SEG_LEFT_TOP);
+            draw_segment(SEG_CENTER);
             break;
 
         case 9:
-            draw_segment(0);
-            draw_segment(1);
-            draw_segment(2);
-            draw_segment(3);
-            draw_segment(5);
-            draw_segment(6);
+            draw_segment(SEG_TOP);
+            draw_segment(SEG_RIGHT_TOP);
+            draw_segment(SEG_RIGHT_BOTTOM);
+            draw_segment(SEG_BOTTOM);
+            draw_segment(SEG_LEFT_TOP);
+            draw_segment(SEG_CENTER);
             break;
 
         default:
@@ -218,6 +251,21 @@ static void render_big_layer_number(void) {
             oled_write_P(PSTR("?"), false);
             break;
     }
+}
+
+static void render_big_layer_number(void) {
+    static uint8_t last_layer = 255;
+
+    uint8_t layer = get_highest_layer(layer_state);
+
+    if (layer == last_layer) {
+        return;
+    }
+
+    last_layer = layer;
+
+    oled_clear();
+    render_digit_segments(layer);
 }
 
 void oledkit_render_info_user(void) {
