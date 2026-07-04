@@ -43,3 +43,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define KEYBALL_SCROLLSNAP_ENABLE 2
 #define SCROLLSNAP_HORIZONTAL_SCROLL_BY_VERTICAL_MOTION
+
+#define OLED_TIMEOUT 0
