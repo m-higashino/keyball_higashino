@@ -72,6 +72,60 @@ layer_state_t layer_state_set_user(layer_state_t state) {
     return state;
 }
 
+static uint8_t oled_layer = 0;
+
+#ifdef SPLIT_KEYBOARD
+
+static void user_sync_layer_handler(
+    uint8_t in_buflen,
+    const void *in_data,
+    uint8_t out_buflen,
+    void *out_data
+) {
+    oled_layer = *(const uint8_t *)in_data;
+}
+
+static void sync_layer_to_slave_if_changed(void) {
+    if (!is_keyboard_master()) {
+        return;
+    }
+
+    static uint8_t last_sent_layer = 255;
+
+    uint8_t current_layer = get_highest_layer(layer_state);
+
+    if (current_layer == last_sent_layer) {
+        return;
+    }
+
+    if (transaction_rpc_send(
+            USER_SYNC_LAYER,
+            sizeof(current_layer),
+            &current_layer)) {
+
+        last_sent_layer = current_layer;
+    }
+}
+
+#endif
+
+void keyboard_post_init_user(void) {
+#ifdef SPLIT_KEYBOARD
+    transaction_register_rpc(
+        USER_SYNC_LAYER,
+        user_sync_layer_handler
+    );
+#endif
+}
+
+void housekeeping_task_user(void) {
+#ifdef SPLIT_KEYBOARD
+    sync_layer_to_slave_if_changed();
+#else
+    oled_layer = get_highest_layer(layer_state);
+#endif
+}
+
 #ifdef OLED_ENABLE
 
 #    include "lib/oledkit/oledkit.h"
@@ -256,7 +310,7 @@ static void render_digit_segments(uint8_t layer) {
 static void render_big_layer_number(void) {
     static uint8_t last_layer = 255;
 
-    uint8_t layer = get_highest_layer(layer_state);
+    uint8_t layer = oled_layer;
 
     if (layer == last_layer) {
         return;
