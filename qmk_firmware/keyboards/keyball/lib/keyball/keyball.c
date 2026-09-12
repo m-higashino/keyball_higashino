@@ -29,9 +29,9 @@ const uint8_t CPI_DEFAULT    = KEYBALL_CPI_DEFAULT / 100;
 const uint8_t CPI_MAX        = pmw3360_MAXCPI + 1;
 const uint8_t SCROLL_DIV_MAX = 7;
 
-const uint16_t AML_TIMEOUT_MIN = 100;
-const uint16_t AML_TIMEOUT_MAX = 1000;
-const uint16_t AML_TIMEOUT_QU  = 50;   // Quantization Unit
+const uint16_t AML_TIMEOUT_MIN = 1000;
+const uint16_t AML_TIMEOUT_MAX = 10000;
+const uint16_t AML_TIMEOUT_QU  = 500;   // Quantization Unit
 
 static const char BL = '\xB0'; // Blank indicator character
 static const char LFSTR_ON[] PROGMEM = "\xB2\xB3";
@@ -740,13 +740,13 @@ bool process_record_kb(uint16_t keycode, keyrecord_t *record) {
                 break;
             case AML_I50:
                 {
-                    uint16_t v = get_auto_mouse_timeout() + 50;
+                    uint16_t v = get_auto_mouse_timeout() + AML_TIMEOUT_QU;
                     set_auto_mouse_timeout(MIN(v, AML_TIMEOUT_MAX));
                 }
                 break;
             case AML_D50:
                 {
-                    uint16_t v = get_auto_mouse_timeout() - 50;
+                    uint16_t v = get_auto_mouse_timeout() - AML_TIMEOUT_QU;
                     set_auto_mouse_timeout(MAX(v, AML_TIMEOUT_MIN));
                 }
                 break;
